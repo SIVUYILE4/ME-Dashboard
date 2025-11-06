@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+
+{% block title %}Trends Analysis - Policy Performance Dashboard{% endblock %}
+
+{% block page_title %}Policy Performance Trends Analysis{% endblock %}
+
+{% block content %}
+<div class="page-content">
+    <!-- Monthly Policy Count Charts -->
+    <div class="charts-section">
+        <div class="chart-container" style="width: 100%; height: 400px; margin-bottom: 30px;">
+            <div class="chart-header">
+                <h3>Sales by Month (Last 6 Months)</h3>
+                <div class="chart-controls">
+                    <button class="btn btn-secondary" onclick="refreshData()">
+                        <i class="fas fa-refresh"></i>
+                        Refresh Data
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Sales Chart Canvas -->
+            <div class="chart-wrapper">
+                <canvas id="salesChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-container" style="width: 100%; height: 400px;">
+            <div class="chart-header">
+                <h3>Reinstatements by Month (Last 6 Months)</h3>
+                <div class="chart-controls">
+                    <button class="btn btn-secondary" onclick="refreshData()">
+                        <i class="fas fa-refresh"></i>
+                        Refresh Data
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Reinstatements Chart Canvas -->
+            <div class="chart-wrapper">
+                <canvas id="reinstatementsChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include Chart.js library -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+
+<script>
+let salesChart;
+let reinstatementsChart;
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    loadMonthlyData();
+});
+
+function loadMonthlyData() {
+    fetch('/api/policy-count-by-month')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Error loading monthly data:', data.error);
+                return;
+            }
+            updateSalesChart(data);
+            updateReinstatementsChart(data);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+}
+
+function updateSalesChart(data) {
+    const ctx = document.getElementById('salesChart').getContext('2d');
+    
+    if (salesChart) {
+        salesChart.destroy();
+    }
+    
+    // Filter data to show only last 6 months
+    const last6Months = Math.min(6, data.periods.length);
+    const startIndex = data.periods.length - last6Months;
+    
+    const filteredPeriods = data.periods.slice(startIndex);
+    const filteredSalesCounts = data.sales_counts.slice(startIndex);
+    
+    salesChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: filteredPeriods,
+            datasets: [{
+                label: 'Sales',
+                data: filteredSalesCounts,
+                borderColor: '#4e73df',
+                backgroundColor: 'rgba(78, 115, 223, 0.2)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: '#4e73df',
+                pointBorderColor: '#4e73df',
+                pointRadius: 5,
+                pointHoverRadius: 7
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.parsed.y} policies`;
+                        }
+                    }
+                },
+                datalabels: {
+                    display: true,
+                    align: 'top',
+                    anchor: 'end',
+                    backgroundColor: 'rgba(78, 115, 223, 0.8)',
+                    borderColor: 'white',
+                    borderRadius: 4,
+                    borderWidth: 1,
+                    color: 'white',
+                    font: {
+                        weight: 'bold',
+                        size: 11
+                    },
+                    formatter: function(value) {
+                        return value;
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    display: true,
+                    title: {
+                        display: true,
+                        text: 'Month (YYYY-M)'
+                    },
+                    grid: {
+                        display: true,
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: false
+                    },
+                    ticks: {
+                        display: false
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    }
+                }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            }
+        },
+        plugins: [ChartDataLabels]
+    });
+}
+
+function updateReinstatementsChart(data) {
+    const ctx = document.getElementById('reinstatementsChart').getContext('2d');
+    
+    if (reinstatementsChart) {
+        reinstatementsChart.destroy();
+    }
+    
+    // Filter data to show only last 6 months
+    const last6Months = Math.min(6, data.periods.length);
+    const startIndex = data.periods.length - last6Months;
+    
+    const filteredPeriods = data.periods.slice(startIndex);
+    const filteredReinstatementsCounts = data.reinstatements_counts.slice(startIndex);
+    
+    reinstatementsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: filteredPeriods,
+            datasets: [{
+                label: 'Reinstatements',
+                data: filteredReinstatementsCounts,
+                borderColor: '#1cc88a',
+                backgroundColor: 'rgba(28, 200, 138, 0.2)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: '#1cc88a',
+                pointBorderColor: '#1cc88a',
+                pointRadius: 5,
+                pointHoverRadius: 7
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.parsed.y} policies`;
+                        }
+                    }
+                },
+                datalabels: {
+                    display: true,
+                    align: 'top',
+                    anchor: 'end',
+                    backgroundColor: 'rgba(28, 200, 138, 0.8)',
+                    borderColor: 'white',
+                    borderRadius: 4,
+                    borderWidth: 1,
+                    color: 'white',
+                    font: {
+                        weight: 'bold',
+                        size: 11
+                    },
+                    formatter: function(value) {
+                        return value;
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    display: true,
+                    title: {
+                        display: true,
+                        text: 'Month (YYYY-M)'
+                    },
+                    grid: {
+                        display: true,
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: false
+                    },
+                    ticks: {
+                        display: false
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    }
+                }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            }
+        },
+        plugins: [ChartDataLabels]
+    });
+}
+
+function refreshData() {
+    loadMonthlyData();
+}
+
+// Auto-refresh data every 5 minutes
+setInterval(loadMonthlyData, 5 * 60 * 1000);
+</script>
+{% endblock %}

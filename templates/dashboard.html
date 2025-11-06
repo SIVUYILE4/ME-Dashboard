@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Commission Dashboard{% endblock %}
+
+{% block page_title %}Welcome to Commission Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-content">
+    <!-- Welcome Banner -->
+    <div style="background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); padding: 40px; border-radius: 8px; color: white; margin-bottom: 30px; text-align: center;">
+        <h1 style="font-size: 2.5em; margin-bottom: 15px;">Commission Tracking Dashboard</h1>
+        <p style="font-size: 1.2em; opacity: 0.9;">Monitor and analyze commission data from the Quill database</p>
+    </div>
+    
+    <!-- Quick Stats -->
+    <div class="metrics-grid">
+        <a href="{{ url_for('trends') }}" style="text-decoration: none;">
+            <div class="metric-card" style="cursor: pointer; transition: transform 0.3s;">
+                <div class="metric-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+                    <i class="fas fa-chart-area"></i>
+                </div>
+                <div class="metric-info">
+                    <h3 class="metric-title">Trends Analysis</h3>
+                    <p class="metric-value" style="font-size: 1.3em;">View Trends</p>
+                    <span class="metric-change neutral">Historical Data & Analytics</span>
+                </div>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('gross_commission') }}" style="text-decoration: none;">
+            <div class="metric-card" style="cursor: pointer; transition: transform 0.3s;">
+                <div class="metric-icon" style="background: linear-gradient(135deg, #f093fb, #f5576c);">
+                    <i class="fas fa-dollar-sign"></i>
+                </div>
+                <div class="metric-info">
+                    <h3 class="metric-title">Gross Commission</h3>
+                    <p class="metric-value" style="font-size: 1.3em;">View Details</p>
+                    <span class="metric-change neutral">Performance by Representative</span>
+                </div>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('net_commission') }}" style="text-decoration: none;">
+            <div class="metric-card" style="cursor: pointer; transition: transform 0.3s;">
+                <div class="metric-icon" style="background: linear-gradient(135deg, #4facfe, #00f2fe);">
+                    <i class="fas fa-calculator"></i>
+                </div>
+                <div class="metric-info">
+                    <h3 class="metric-title">Net Commission</h3>
+                    <p class="metric-value" style="font-size: 1.3em;">View Analysis</p>
+                    <span class="metric-change neutral">Calculations & Breakdowns</span>
+                </div>
+            </div>
+        </a>
+    </div>
+    
+    <!-- Features Section -->
+    <div style="margin-top: 40px;">
+        <h2 style="margin-bottom: 20px; color: var(--primary-color);">Dashboard Features</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+            <div style="background: white; padding: 25px; border-radius: 8px; box-shadow: var(--shadow-light);">
+                <i class="fas fa-database" style="font-size: 2em; color: var(--accent-color); margin-bottom: 15px;"></i>
+                <h3 style="margin-bottom: 10px;">Real-time Data</h3>
+                <p style="color: var(--text-secondary);">Connect directly to the Quill MSSQL database on CL-JHB-SQL-01 server for real-time commission tracking.</p>
+            </div>
+            
+            <div style="background: white; padding: 25px; border-radius: 8px; box-shadow: var(--shadow-light);">
+                <i class="fas fa-chart-line" style="font-size: 2em; color: var(--success-color); margin-bottom: 15px;"></i>
+                <h3 style="margin-bottom: 10px;">Interactive Charts</h3>
+                <p style="color: var(--text-secondary);">Visualize trends, performance metrics, and commission data with interactive charts and graphs.</p>
+            </div>
+            
+            <div style="background: white; padding: 25px; border-radius: 8px; box-shadow: var(--shadow-light);">
+                <i class="fas fa-shield-alt" style="font-size: 2em; color: var(--warning-color); margin-bottom: 15px;"></i>
+                <h3 style="margin-bottom: 10px;">Windows Authentication</h3>
+                <p style="color: var(--text-secondary);">Secure access using Windows Authentication to connect to the SQL Server database.</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Getting Started -->
+    <div style="margin-top: 40px; background: #f8f9fa; padding: 30px; border-radius: 8px; border-left: 4px solid var(--accent-color);">
+        <h3 style="margin-bottom: 15px; color: var(--primary-color);">
+            <i class="fas fa-rocket"></i> Getting Started
+        </h3>
+        <ol style="color: var(--text-primary); line-height: 2;">
+            <li>Navigate to <strong>Trends</strong> to view historical commission data and analytics</li>
+            <li>Check <strong>Gross Commission</strong> for detailed performance metrics by sales representative</li>
+            <li>Review <strong>Net Commission</strong> for net earnings calculations and efficiency analysis</li>
+        </ol>
+    </div>
+</div>
+
+<script>
+// Add hover effects to cards
+document.querySelectorAll('.metric-card').forEach(card => {
+    card.addEventListener('mouseenter', function() {
+        this.style.transform = 'translateY(-5px)';
+    });
+    card.addEventListener('mouseleave', function() {
+        this.style.transform = 'translateY(0)';
+    });
+});
+</script>
+{% endblock %}
