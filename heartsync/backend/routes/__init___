@@ -1,0 +1,19 @@
+"""
+Routes module for HeartSync Dating App
+"""
+
+from flask import Blueprint
+
+# Create blueprints
+auth_bp = Blueprint('auth', __name__)
+users_bp = Blueprint('users', __name__)
+matches_bp = Blueprint('matches', __name__)
+messages_bp = Blueprint('messages', __name__)
+safety_bp = Blueprint('safety', __name__)
+
+# Import routes after blueprint creation to avoid circular imports
+from . import auth
+from . import users
+from . import matches
+from . import messages
+from . import safety

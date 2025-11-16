@@ -48,160 +48,44 @@ def net_commission():
 # API Routes for data
 @app.route('/api/trends-data')
 def get_trends_data():
-    """Get trends data for charts - Sales, Reinstatements, and Lapses"""
+    """Get trends data for charts - Sales, Reinstatements, and Lapses from vw_dashboard_month_end"""
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
     
     try:
-        # Sales query
-        sales_query = """
+        # Query to get monthly totals for the last 6 months from vw_dashboard_month_end
+        trends_query = """
         SELECT 
-          Count(distinct PM.PolicyMasterID) as Policies, 
-          ProductionPeriod as Period, 
-          ProductCategoryDescription as ProductType
-        FROM 
-          vw_ssrs_sales_1 SV 
-          INNER JOIN PolicyMaster PM ON PM.PolicyMasterID = SV.PolicyMasterID 
-        WHERE 
-          NewBusinessWithUpgradeSale = 1 
-          AND ProductCategoryID NOT IN (8, 11) 
-          AND ProductionPeriod IS NOT NULL
-          AND ProductionPeriod >= '2024-1' 
-        GROUP BY 
-          ProductionPeriod, 
-          ProductCategoryDescription
-        ORDER BY
-          ProductionPeriod DESC,
-          ProductCategoryDescription
+            FORMAT(run_date, 'yyyy-MM') as Period,
+            SUM(sales) as total_sales,
+            SUM(lapses) as total_lapses,
+            SUM(reinstatements) as total_reinstatements
+        FROM vw_dashboard_month_end 
+        WHERE run_date IS NOT NULL
+        AND run_date >= DATEADD(month, -6, GETDATE())
+        GROUP BY FORMAT(run_date, 'yyyy-MM')
+        ORDER BY Period
         """
         
-        # Execute queries
-        sales_df = pd.read_sql(sales_query, conn)
+        df = pd.read_sql(trends_query, conn)
         
-        # Reinstatements query
-        reinstatements_query = """
-        select 
-          Count(distinct PM.PolicyMasterID) as Policies, 
-          CONCAT(YEAR(PM.Reinstdate), '-', MONTH(PM.Reinstdate)) as Period, 
-          ProductCategoryDescription ProductType 
-        from 
-          vw_ssrs_sales_1 SV 
-          inner join PolicyMaster PM on PM.PolicyMasterID = SV.PolicyMasterID 
-        where productcategoryid not in (8, 11) 
-        AND SV.ProductionPeriod >= '2024-1' 
-        AND PM.Reinstdate IS NOT NULL
-        group by 
-          CONCAT(
-            YEAR(PM.Reinstdate), 
-            '-', 
-            MONTH(PM.Reinstdate)
-          ), 
-          ProductCategoryDescription
-        """
+        # Prepare chart data
+        periods = df['Period'].tolist() if not df.empty else []
+        sales_data = df['total_sales'].fillna(0).tolist() if not df.empty else []
+        reinstatements_data = df['total_reinstatements'].fillna(0).tolist() if not df.empty else []
+        lapses_data = df['total_lapses'].fillna(0).tolist() if not df.empty else []
         
-        # Lapses query
-        lapses_query = """
-        SELECT 
-          COUNT(DISTINCT PM.PolicyMasterID) AS Policies, 
-          PM.Status, 
-          CONCAT(
-            YEAR(PM.StatusDate), 
-            '-', 
-            RIGHT('0' + CAST(MONTH(PM.StatusDate) AS VARCHAR(2)), 2)
-          ) AS Period, 
-          ProductCategoryDescription AS ProductType 
-        FROM 
-          vw_ssrs_sales_1 SV 
-          INNER JOIN PolicyMaster PM ON PM.PolicyMasterID = SV.PolicyMasterID 
-        WHERE 
-          PM.Status IN ('Auto-Lapse', 'Cancelled') 
-          AND ProductCategoryID NOT IN (8, 11) 
-          AND sv.newbusinesswithupgradesale = 1
-        GROUP BY 
-          PM.Status, 
-          CONCAT(
-            YEAR(PM.StatusDate), 
-            '-', 
-            RIGHT('0' + CAST(MONTH(PM.StatusDate) AS VARCHAR(2)), 2)
-          ), 
-          ProductCategoryDescription
-        ORDER BY
-          Period DESC,
-          PM.Status,
-          ProductCategoryDescription
-        """
+        # Calculate policy count by month (sales + reinstatements)
+        policy_count_by_month = [sales + reinstatements for sales, reinstatements in zip(sales_data, reinstatements_data)]
         
-        # Execute queries
-        sales_df = pd.read_sql(sales_query, conn)
-        reinstatements_df = pd.read_sql(reinstatements_query, conn)
-        lapses_df = pd.read_sql(lapses_query, conn)
-        
-        # Process data for charts
-        # Sales data
-        sales_data = {}
-        for _, row in sales_df.iterrows():
-            period = row['Period']
-            policies = row['Policies']
-            product_type = row['ProductType']
-            
-            if period not in sales_data:
-                sales_data[period] = {'total': 0, 'products': {}}
-            sales_data[period]['total'] += policies
-            sales_data[period]['products'][product_type] = policies
-        
-        # Reinstatements data
-        reinstatements_data = {}
-        for _, row in reinstatements_df.iterrows():
-            period = row['Period']
-            policies = row['Policies']
-            product_type = row['ProductType']
-            
-            if period not in reinstatements_data:
-                reinstatements_data[period] = {'total': 0, 'products': {}}
-            reinstatements_data[period]['total'] += policies
-            reinstatements_data[period]['products'][product_type] = policies
-        
-        # Lapses data
-        lapses_data = {}
-        for _, row in lapses_df.iterrows():
-            period = row['Period']
-            policies = row['Policies']
-            status = row['Status']
-            product_type = row['ProductType']
-            
-            if period not in lapses_data:
-                lapses_data[period] = {'total': 0, 'products': {}}
-            lapses_data[period]['total'] += policies
-            lapses_data[period]['products'][product_type] = policies
-        
-        # Combine all periods
-        all_periods = set()
-        all_periods.update(sales_data.keys())
-        all_periods.update(reinstatements_data.keys())
-        all_periods.update(lapses_data.keys())
-        
-        # Sort periods
-        sorted_periods = sorted(all_periods)
-        
-        # Prepare chart data with policy count by month
         chart_data = {
-            'periods': sorted_periods,
-            'sales': [],
-            'reinstatements': [],
-            'lapses': [],
-            'policy_count_by_month': []
+            'periods': periods,
+            'sales': sales_data,
+            'reinstatements': reinstatements_data,
+            'lapses': lapses_data,
+            'policy_count_by_month': policy_count_by_month
         }
-        
-        for period in sorted_periods:
-            sales_count = sales_data.get(period, {}).get('total', 0)
-            reinstatements_count = reinstatements_data.get(period, {}).get('total', 0)
-            lapses_count = lapses_data.get(period, {}).get('total', 0)
-            
-            chart_data['sales'].append(sales_count)
-            chart_data['reinstatements'].append(reinstatements_count)
-            chart_data['lapses'].append(lapses_count)
-            chart_data['policy_count_by_month'].append(sales_count + reinstatements_count)
         
         conn.close()
         return jsonify(chart_data)
@@ -212,127 +96,53 @@ def get_trends_data():
 
 @app.route('/api/policy-count-by-month')
 def get_policy_count_by_month():
-    """Get policy count breakdown by month (sales + reinstatements)"""
+    """Get policy count breakdown by month (sales + reinstatements) from vw_dashboard_month_end"""
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
     
     try:
-        # Sales query for monthly policy count
-        sales_query = """
+        # Query to get monthly data for the last 6 months from vw_dashboard_month_end
+        monthly_query = """
         SELECT 
-          ProductionPeriod as Period,
-          COUNT(distinct PM.PolicyMasterID) as Policies
-        FROM 
-          vw_ssrs_sales_1 SV 
-          INNER JOIN PolicyMaster PM ON PM.PolicyMasterID = SV.PolicyMasterID 
-        WHERE 
-          NewBusinessWithUpgradeSale = 1 
-          AND ProductCategoryID NOT IN (8, 11) 
-          AND ProductionPeriod IS NOT NULL
-          AND ProductionPeriod >= '2024-1' 
-        GROUP BY 
-          ProductionPeriod
-        ORDER BY ProductionPeriod
+            FORMAT(run_date, 'yyyy-MM') as period,
+            SUM(sales) as sales_counts,
+            SUM(lapses) as lapses_counts,
+            SUM(reinstatements) as reinstatements_counts
+        FROM vw_dashboard_month_end 
+        WHERE run_date IS NOT NULL
+        AND run_date >= DATEADD(month, -6, GETDATE())
+        GROUP BY FORMAT(run_date, 'yyyy-MM')
+        ORDER BY period
         """
         
-        # Reinstatements query for monthly policy count
-        reinstatements_query = """
-        select 
-          CONCAT(YEAR(PM.Reinstdate), '-', MONTH(PM.Reinstdate)) as Period,
-          Count(distinct PM.PolicyMasterID) as Policies
-        from 
-          vw_ssrs_sales_1 SV 
-          inner join PolicyMaster PM on PM.PolicyMasterID = SV.PolicyMasterID 
-        where productcategoryid not in (8, 11) 
-        AND SV.ProductionPeriod >= '2024-1' 
-        AND PM.Reinstdate IS NOT NULL
-        group by 
-          CONCAT(YEAR(PM.Reinstdate), '-', MONTH(PM.Reinstdate))
-        ORDER BY Period
-        """
+        df = pd.read_sql(monthly_query, conn)
         
-        # Execute queries
-        sales_df = pd.read_sql(sales_query, conn)
-        reinstatements_df = pd.read_sql(reinstatements_query, conn)
-        
-        # Process sales data by period
-        sales_data = {}
-        for _, row in sales_df.iterrows():
-            period = row['Period']
-            sales_data[period] = row['Policies']
-        
-        # Process reinstatements data by period
-        reinstatements_data = {}
-        for _, row in reinstatements_df.iterrows():
-            period = row['Period']
-            reinstatements_data[period] = row['Policies']
-        
-        # Get lapses data for context - use same logic as trends-data
-        lapses_query = """
-        SELECT 
-          COUNT(DISTINCT PM.PolicyMasterID) AS Policies,
-          CONCAT(
-            YEAR(PM.StatusDate), 
-            '-', 
-            RIGHT('0' + CAST(MONTH(PM.StatusDate) AS VARCHAR(2)), 2)
-          ) AS Period
-        FROM 
-          vw_ssrs_sales_1 SV 
-          INNER JOIN PolicyMaster PM ON PM.PolicyMasterID = SV.PolicyMasterID 
-        WHERE 
-          PM.Status IN ('Auto-Lapse', 'Cancelled') 
-          AND ProductCategoryID NOT IN (8, 11)
-        GROUP BY 
-          CONCAT(
-            YEAR(PM.StatusDate), 
-            '-', 
-            RIGHT('0' + CAST(MONTH(PM.StatusDate) AS VARCHAR(2)), 2)
-          )
-        ORDER BY Period
-        """
-        
-        lapses_df = pd.read_sql(lapses_query, conn)
-        lapses_data = {}
-        for _, row in lapses_df.iterrows():
-            period = row['Period']
-            lapses_data[period] = row['Policies']
-        
-        # CRITICAL FIX: Combine ALL periods from ALL data sources (just like in get_trends_data)
-        all_periods = set()
-        all_periods.update(sales_data.keys())
-        all_periods.update(reinstatements_data.keys())
-        all_periods.update(lapses_data.keys())
-        
-        # Sort all periods
-        periods = sorted(all_periods)
-        
-        # Build arrays for all periods
-        policy_counts = []
-        sales_counts = []
-        reinstatements_counts = []
-        lapses_counts = []
-        
-        for period in periods:
-            sales_count = sales_data.get(period, 0)
-            reinstatements_count = reinstatements_data.get(period, 0)
-            total_count = sales_count + reinstatements_count
-            lapses_count = lapses_data.get(period, 0)
+        if not df.empty:
+            periods = df['period'].tolist()
+            sales_counts = df['sales_counts'].fillna(0).tolist()
+            reinstatements_counts = df['reinstatements_counts'].fillna(0).tolist()
+            lapses_counts = df['lapses_counts'].fillna(0).tolist()
             
-            sales_counts.append(sales_count)
-            reinstatements_counts.append(reinstatements_count)
-            policy_counts.append(total_count)
-            lapses_counts.append(lapses_count)
-        
-        # Calculate month-over-month changes
-        monthly_changes = []
-        for i, count in enumerate(policy_counts):
-            if i == 0:
-                monthly_changes.append(0)  # No change for first month
-            else:
-                prev_count = policy_counts[i-1]
-                change_percent = ((count - prev_count) / prev_count * 100) if prev_count > 0 else 0
-                monthly_changes.append(round(change_percent, 1))
+            # Calculate policy counts (sales + reinstatements)
+            policy_counts = [sales + reinstatements for sales, reinstatements in zip(sales_counts, reinstatements_counts)]
+            
+            # Calculate month-over-month changes
+            monthly_changes = []
+            for i, count in enumerate(policy_counts):
+                if i == 0:
+                    monthly_changes.append(0)  # No change for first month
+                else:
+                    prev_count = policy_counts[i-1]
+                    change_percent = ((count - prev_count) / prev_count * 100) if prev_count > 0 else 0
+                    monthly_changes.append(round(change_percent, 1))
+        else:
+            periods = []
+            sales_counts = []
+            reinstatements_counts = []
+            lapses_counts = []
+            policy_counts = []
+            monthly_changes = []
         
         data = {
             'periods': periods,
@@ -354,37 +164,93 @@ def get_policy_count_by_month():
         print(f"Error in get_policy_count_by_month: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/policy-count-yoy')
+def get_policy_count_yoy():
+    """Get year-over-year policy count data for trends analysis from vw_dashboard_month_end"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+    
+    try:
+        # Query to get monthly data for the last 6 months from vw_dashboard_month_end
+        yoy_query = """
+        SELECT 
+            FORMAT(run_date, 'yyyy-MM') as period,
+            SUM(sales) as total_sales,
+            SUM(lapses) as total_lapses,
+            SUM(reinstatements) as total_reinstatements
+        FROM vw_dashboard_month_end 
+        WHERE run_date IS NOT NULL
+        AND run_date >= DATEADD(month, -6, GETDATE())
+        GROUP BY FORMAT(run_date, 'yyyy-MM')
+        ORDER BY period
+        """
+        
+        df = pd.read_sql(yoy_query, conn)
+        
+        # Get the last 6 months periods (most recent 6 months)
+        if not df.empty:
+            periods = df['period'].tolist()
+            sales_current = df['total_sales'].fillna(0).tolist()
+            lapses_current = df['total_lapses'].fillna(0).tolist()
+            reinstatements_current = df['total_reinstatements'].fillna(0).tolist()
+        else:
+            periods = []
+            sales_current = []
+            lapses_current = []
+            reinstatements_current = []
+        
+        # For previous year data, we'll use the same months from last year
+        # Since the new view may not have complete historical data, we'll use zeros for comparison
+        sales_previous = [0] * len(periods)
+        lapses_previous = [0] * len(periods)
+        reinstatements_previous = [0] * len(periods)
+        
+        data = {
+            'periods': periods,
+            'sales_current': sales_current,
+            'sales_previous': sales_previous,
+            'reinstatements_current': reinstatements_current,
+            'reinstatements_previous': reinstatements_previous,
+            'lapses_current': lapses_current,
+            'lapses_previous': lapses_previous
+        }
+        
+        conn.close()
+        return jsonify(data)
+        
+    except Exception as e:
+        print(f"Error in get_policy_count_yoy: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/reinstatements-data')
 def get_reinstatements_data():
-    """Get reinstatements data"""
+    """Get reinstatements data from vw_dashboard_month_end"""
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
     
     try:
         query = """
-        select 
-          ProductCategoryDescription as ProductType,
-          Count(distinct PM.PolicyMasterID) as PolicyCount,
-          CONCAT(YEAR(PM.Reinstdate), '-', MONTH(PM.Reinstdate)) as Period
-        from 
-          vw_ssrs_sales_1 SV 
-          inner join PolicyMaster PM on PM.PolicyMasterID = SV.PolicyMasterID 
-        where productcategoryid not in (8, 11) 
-        AND SV.ProductionPeriod >= '2024-1'
-        AND PM.Reinstdate IS NOT NULL
-        group by 
-          ProductCategoryDescription,
-          CONCAT(YEAR(PM.Reinstdate), '-', MONTH(PM.Reinstdate))
+        SELECT 
+            product_category_description as ProductType,
+            SUM(reinstatements) as PolicyCount,
+            FORMAT(run_date, 'yyyy-MM') as Period
+        FROM vw_dashboard_month_end 
+        WHERE run_date IS NOT NULL
+        AND run_date >= DATEADD(month, -6, GETDATE())
+        AND reinstatements > 0
+        GROUP BY product_category_description, FORMAT(run_date, 'yyyy-MM')
         ORDER BY Period DESC, PolicyCount DESC
         """
         
         df = pd.read_sql(query, conn)
         
         data = {
-            'product_types': df['ProductType'].tolist(),
-            'policy_counts': df['PolicyCount'].tolist(),
-            'periods': df['Period'].tolist()
+            'product_types': df['ProductType'].tolist() if not df.empty else [],
+            'policy_counts': df['PolicyCount'].fillna(0).tolist() if not df.empty else [],
+            'periods': df['Period'].tolist() if not df.empty else []
         }
         
         conn.close()
@@ -395,7 +261,7 @@ def get_reinstatements_data():
 
 @app.route('/api/lapses-data')
 def get_lapses_data():
-    """Get lapses data"""
+    """Get lapses data from vw_dashboard_month_end"""
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
@@ -403,39 +269,25 @@ def get_lapses_data():
     try:
         query = """
         SELECT 
-          ProductCategoryDescription as ProductType,
-          PM.Status as Status,
-          COUNT(DISTINCT PM.PolicyMasterID) AS PolicyCount,
-          CONCAT(
-            YEAR(PM.StatusDate), 
-            '-', 
-            RIGHT('0' + CAST(MONTH(PM.StatusDate) AS VARCHAR(2)), 2)
-          ) AS Period
-        FROM 
-          vw_ssrs_sales_1 SV 
-          INNER JOIN PolicyMaster PM ON PM.PolicyMasterID = SV.PolicyMasterID 
-        WHERE 
-          PM.Status IN ('Auto-Lapse', 'Cancelled') 
-          AND ProductCategoryID NOT IN (8, 11) 
-          AND sv.newbusinesswithupgradesale = 1
-        GROUP BY 
-          ProductCategoryDescription,
-          PM.Status,
-          CONCAT(
-            YEAR(PM.StatusDate), 
-            '-', 
-            RIGHT('0' + CAST(MONTH(PM.StatusDate) AS VARCHAR(2)), 2)
-          )
+            product_category_description as ProductType,
+            'Lapse' as Status,
+            SUM(lapses) as PolicyCount,
+            FORMAT(run_date, 'yyyy-MM') as Period
+        FROM vw_dashboard_month_end 
+        WHERE run_date IS NOT NULL
+        AND run_date >= DATEADD(month, -6, GETDATE())
+        AND lapses > 0
+        GROUP BY product_category_description, FORMAT(run_date, 'yyyy-MM')
         ORDER BY Period DESC, PolicyCount DESC
         """
         
         df = pd.read_sql(query, conn)
         
         data = {
-            'product_types': df['ProductType'].tolist(),
-            'policy_counts': df['PolicyCount'].tolist(),
-            'status': df['Status'].tolist(),
-            'periods': df['Period'].tolist()
+            'product_types': df['ProductType'].tolist() if not df.empty else [],
+            'policy_counts': df['PolicyCount'].fillna(0).tolist() if not df.empty else [],
+            'status': df['Status'].tolist() if not df.empty else [],
+            'periods': df['Period'].tolist() if not df.empty else []
         }
         
         conn.close()

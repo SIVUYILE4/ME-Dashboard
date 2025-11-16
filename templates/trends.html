@@ -1,12 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Trends Analysis - Policy Performance Dashboard{% endblock %}
+{% block title %}Month End Reporting - Policy Performance Dashboard{% endblock %}
 
-{% block page_title %}Policy Performance Trends Analysis{% endblock %}
+{% block page_title %}
+<div style="text-align: center; width: 100%;">Month End Reporting</div>
+{% endblock %}
 
 {% block content %}
 <div class="page-content">
-    <!-- Monthly Policy Count Charts -->
+    <!-- Monthly Policy Count Charts (Current Year Only) -->
     <div class="charts-section">
         <div class="chart-container" style="width: 100%; height: 400px; margin-bottom: 30px;">
             <div class="chart-header">
@@ -54,15 +56,15 @@ let lapsesChart;
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
-    loadMonthlyData();
+    loadCurrentData();
 });
 
-function loadMonthlyData() {
-    fetch('/api/policy-count-by-month')
+function loadCurrentData() {
+    fetch('/api/policy-count-yoy')
         .then(response => response.json())
         .then(data => {
             if (data.error) {
-                console.error('Error loading monthly data:', data.error);
+                console.error('Error loading current data:', data.error);
                 return;
             }
             updateSalesChart(data);
@@ -81,20 +83,13 @@ function updateSalesChart(data) {
         salesChart.destroy();
     }
     
-    // Filter data to show only last 6 months
-    const last6Months = Math.min(6, data.periods.length);
-    const startIndex = data.periods.length - last6Months;
-    
-    const filteredPeriods = data.periods.slice(startIndex);
-    const filteredSalesCounts = data.sales_counts.slice(startIndex);
-    
     salesChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: filteredPeriods,
+            labels: data.periods,
             datasets: [{
                 label: 'Sales',
-                data: filteredSalesCounts,
+                data: data.sales_current,
                 borderColor: '#4e73df',
                 backgroundColor: 'rgba(78, 115, 223, 0.2)',
                 borderWidth: 3,
@@ -118,7 +113,7 @@ function updateSalesChart(data) {
                     intersect: false,
                     callbacks: {
                         label: function(context) {
-                            return `${context.dataset.label}: ${context.parsed.y} policies`;
+                            return `Sales: ${context.parsed.y.toLocaleString()} policies`;
                         }
                     }
                 },
@@ -136,7 +131,7 @@ function updateSalesChart(data) {
                         size: 11
                     },
                     formatter: function(value) {
-                        return value;
+                        return value > 0 ? value.toLocaleString() : '';
                     }
                 }
             },
@@ -144,8 +139,7 @@ function updateSalesChart(data) {
                 x: {
                     display: true,
                     title: {
-                        display: true,
-                        text: 'Month (YYYY-M)'
+                        display: false
                     },
                     grid: {
                         display: true,
@@ -182,20 +176,13 @@ function updateReinstatementsChart(data) {
         reinstatementsChart.destroy();
     }
     
-    // Filter data to show only last 6 months
-    const last6Months = Math.min(6, data.periods.length);
-    const startIndex = data.periods.length - last6Months;
-    
-    const filteredPeriods = data.periods.slice(startIndex);
-    const filteredReinstatementsCounts = data.reinstatements_counts.slice(startIndex);
-    
     reinstatementsChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: filteredPeriods,
+            labels: data.periods,
             datasets: [{
                 label: 'Reinstatements',
-                data: filteredReinstatementsCounts,
+                data: data.reinstatements_current,
                 borderColor: '#1cc88a',
                 backgroundColor: 'rgba(28, 200, 138, 0.2)',
                 borderWidth: 3,
@@ -219,7 +206,7 @@ function updateReinstatementsChart(data) {
                     intersect: false,
                     callbacks: {
                         label: function(context) {
-                            return `${context.dataset.label}: ${context.parsed.y} policies`;
+                            return `Reinstatements: ${context.parsed.y.toLocaleString()} policies`;
                         }
                     }
                 },
@@ -237,7 +224,7 @@ function updateReinstatementsChart(data) {
                         size: 11
                     },
                     formatter: function(value) {
-                        return value;
+                        return value > 0 ? value.toLocaleString() : '';
                     }
                 }
             },
@@ -245,8 +232,7 @@ function updateReinstatementsChart(data) {
                 x: {
                     display: true,
                     title: {
-                        display: true,
-                        text: 'Month (YYYY-M)'
+                        display: false
                     },
                     grid: {
                         display: true,
@@ -283,30 +269,13 @@ function updateLapsesChart(data) {
         lapsesChart.destroy();
     }
     
-    // Filter data to show only last 6 months (same as other charts)
-    const last6Months = Math.min(6, data.periods.length);
-    const startIndex = data.periods.length - last6Months;
-    
-    const filteredPeriods = data.periods.slice(startIndex);
-    const filteredLapsesCounts = data.lapses_counts.slice(startIndex);
-    
-    // Debug logging
-    console.log('Lapses Chart Data:', {
-        totalPeriods: data.periods.length,
-        last6Months: last6Months,
-        startIndex: startIndex,
-        filteredPeriods: filteredPeriods,
-        filteredLapsesCounts: filteredLapsesCounts,
-        allLapsesCounts: data.lapses_counts
-    });
-    
     lapsesChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: filteredPeriods,
+            labels: data.periods,
             datasets: [{
                 label: 'Lapses',
-                data: filteredLapsesCounts,
+                data: data.lapses_current,
                 borderColor: '#e74a3b',
                 backgroundColor: 'rgba(231, 74, 59, 0.2)',
                 borderWidth: 3,
@@ -330,14 +299,12 @@ function updateLapsesChart(data) {
                     intersect: false,
                     callbacks: {
                         label: function(context) {
-                            return `${context.dataset.label}: ${context.parsed.y} policies`;
+                            return `Lapses: ${context.parsed.y.toLocaleString()} policies`;
                         }
                     }
                 },
                 datalabels: {
-                    display: function(context) {
-                        return context.parsed.y > 0; // Only show labels for non-zero values
-                    },
+                    display: true,
                     align: 'top',
                     anchor: 'end',
                     backgroundColor: 'rgba(231, 74, 59, 0.8)',
@@ -349,8 +316,8 @@ function updateLapsesChart(data) {
                         weight: 'bold',
                         size: 11
                     },
-                    formatter: function(value, context) {
-                        return value > 0 ? value.toLocaleString() : ''; // Format non-zero values
+                    formatter: function(value) {
+                        return value > 0 ? value.toLocaleString() : '';
                     }
                 }
             },
@@ -358,8 +325,7 @@ function updateLapsesChart(data) {
                 x: {
                     display: true,
                     title: {
-                        display: true,
-                        text: 'Month (YYYY-M)'
+                        display: false
                     },
                     grid: {
                         display: true,
@@ -390,6 +356,6 @@ function updateLapsesChart(data) {
 }
 
 // Auto-refresh data every 5 minutes
-setInterval(loadMonthlyData, 5 * 60 * 1000);
+setInterval(loadCurrentData, 5 * 60 * 1000);
 </script>
 {% endblock %}
