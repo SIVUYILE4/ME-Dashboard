@@ -54,7 +54,7 @@ def get_trends_data():
         return jsonify({'error': 'Database connection failed'}), 500
     
     try:
-        # Query to get monthly totals for the last 6 months from vw_dashboard_month_end
+        # Query to get monthly totals for last 6 months from vw_dashboard_month_end
         trends_query = """
         SELECT 
             FORMAT(run_date, 'yyyy-MM') as Period,
